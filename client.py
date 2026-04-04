@@ -63,7 +63,8 @@ class F1OpenenvEnv(
 # TEST RUN
 if __name__ == "__main__":
     with F1OpenenvEnv(base_url="http://localhost:8000").sync() as client:
-        print("RESET:", client.reset())
+        # pass task config via reset kwargs
+        print("RESET:", client.reset(laps=30, weather="dry", rain_probability=0.0, safety_car_probability=0.0))
 
         for i in range(30):
             result = client.step(
@@ -74,3 +75,6 @@ if __name__ == "__main__":
                 )
             )
             print(f"Step {i+1}:", result)
+            if result.done:
+                print(f"Race finished at step {i+1}")
+                break
