@@ -1,0 +1,111 @@
+.env
+.env.*
+*.env
+.env.local
+.env.production
+.env.development
+
+# API keys / tokens
+
+*.pem
+*.key
+*.crt
+
+**pycache**/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+
+venv/
+.env/
+.venv/
+ENV/
+env/
+
+# Distribution / packaging
+
+.Python
+build/
+dist/
+*.egg-info/
+.eggs/
+pip-wheel-metadata/
+
+# Dependency / Cache
+
+.cache/
+*.log
+*.sqlite3
+*.db
+
+# pytest / coverage
+
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# Jupyter / Notebooks
+
+.ipynb_checkpoints/
+
+
+.vscode/
+.idea/
+*.swp
+*.swo
+*.DS_Store
+Thumbs.db
+
+# Docker
+
+# Ignore local docker artifacts
+
+docker-compose.override.yml
+*.tar
+
+# HuggingFace / Model Cache
+
+hf_home/
+.cache/huggingface/
+huggingface/
+*.bin
+*.pt
+*.ckpt
+*.safetensors
+
+#  Data Files
+
+# Raw telemetry or large datasets
+
+data/raw/
+data/interim/
+data/processed/*.csv
+data/processed/*.parquet
+
+# OpenEnv / Logs
+
+logs/
+runs/
+outputs/
+results/
+*.out
+
+# Build / Runtime
+
+tmp/
+temp/
+*.tmp
+
+# OS-specific junk
+
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon?
+._*
+
+# (if using FastF1 offline)
+
+fastf1_cache/
