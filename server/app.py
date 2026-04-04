@@ -36,7 +36,7 @@ except Exception as e:  # pragma: no cover
     ) from e
 
 try:
-    from ..models import F1OpenenvAction, F1OpenenvObservation
+    from models import F1OpenenvAction, F1OpenenvObservation
     from .f1_openenv_environment import F1OpenenvEnvironment
 except ModuleNotFoundError:
     from models import F1OpenenvAction, F1OpenenvObservation
