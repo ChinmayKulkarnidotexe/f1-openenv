@@ -1,90 +1,64 @@
+import os
+import re
+import json
+from typing import List, Optional
+
 from openai import OpenAI
+from dotenv import load_dotenv
+
 from client import F1OpenenvEnv
 from models import F1OpenenvAction
 from grader import grade_episode
-from dotenv import load_dotenv
 from tasks import TASKS
-import json
-import re
-import os
 
 load_dotenv()
 
-client = OpenAI(
-    base_url=os.getenv("API_BASE_URL"),
-    api_key=os.getenv("OPENAI_API_KEY")
-)
+API_BASE_URL = os.getenv("API_BASE_URL") or "https://router.huggingface.co/v1"
+API_KEY      = os.getenv("HF_TOKEN") or os.getenv("OPENAI_API_KEY") or os.getenv("API_KEY")
+MODEL_NAME   = os.getenv("MODEL_NAME", "qwen3:0.6b")
+BENCHMARK    = os.getenv("BENCHMARK", "f1-openenv")
+
+TEMPERATURE = 0.2
+MAX_TOKENS = 200
+FALLBACK_ACTION = {"pit": False, "tire_choice": "medium", "push_level": "medium"}
+
+DEBUG = True
 
 
-def run_task(task_config):
-    with F1OpenenvEnv(base_url="http://localhost:8000").sync() as env:
-        # pass task config to server via reset kwargs
-        obs = env.reset(**task_config)
+def log_start(task: str, env: str, model: str) -> None:
+    print(f"[START] task={task} env={env} model={model}", flush=True)
 
-        total_laps = task_config["laps"]
-        history = []
 
-        for step in range(total_laps):
-            prompt = f"""You are an F1 race engineer AI. Make strategic decisions for this lap.
+def log_step(step: int, action: str, reward: float, done: bool, error: Optional[str]) -> None:
+    error_val = error if error else "null"
+    done_val = str(done).lower()
+    print(
+        f"[STEP] step={step} action={action} reward={reward:.2f} done={done_val} error={error_val}",
+        flush=True,
+    )
 
-Race: {task_config['name']} | Lap {step + 1}/{total_laps} | Weather mode: {task_config['weather']}
 
-Current state:
-{obs}
-
-Respond with ONLY a JSON object (no markdown, no explanation):
-{{"pit": True/False, "tire_choice": "soft"/"medium"/"hard", "push_level": "low"/"medium"/"high"}}"""
-
-            response = client.chat.completions.create(
-                model="qwen3:0.6b",
-                messages=[{"role": "user", "content": prompt}],
-            )
-
-            raw_content = response.choices[0].message.content
-            action_json = parse_action(raw_content)
-
-            print(f"\n\n[Lap {step + 1}/{total_laps}] Action: {action_json}")
-            action = F1OpenenvAction(**action_json)
-
-            result = env.step(action)
-
-            history.append({
-                "observation": result.observation,
-                "reward": result.reward,
-                "info": result.observation.metadata
-            })
-
-            obs = result
-            print(f"\nStep {step} results:", result)
-
-            if result.done:
-                print(f"  Race finished at lap {step + 1}")
-                break
-
-        score = grade_episode(history, total_laps)
-        return score
+def log_end(success: bool, steps: int, rewards: List[float]) -> None:
+    rewards_str = ",".join(f"{r:.2f}" for r in rewards)
+    print(f"[END] success={str(success).lower()} steps={steps} rewards={rewards_str}", flush=True)
 
 
 def parse_action(text):
     """Parse LLM output into an action dict, handling common formatting issues."""
     if not text:
-        return _default_action()
+        return dict(FALLBACK_ACTION)
 
-    # strip qwen3 <think>...</think> tags
     text = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
 
-    # strip markdown code fences
     text = re.sub(r"```(?:json)?\s*", "", text).strip()
     text = text.strip("`").strip()
 
-    # try direct JSON parse
     try:
         parsed = json.loads(text)
         return _validate_action(parsed)
     except (json.JSONDecodeError, ValueError):
         pass
 
-    # try to find JSON object in the text
     match = re.search(r"\{[^{}]*\}", text)
     if match:
         try:
@@ -93,7 +67,7 @@ def parse_action(text):
         except (json.JSONDecodeError, ValueError):
             pass
 
-    return _default_action()
+    return dict(FALLBACK_ACTION)
 
 
 def _validate_action(parsed):
@@ -113,8 +87,91 @@ def _validate_action(parsed):
     return {"pit": bool(pit), "tire_choice": tire, "push_level": push}
 
 
-def _default_action():
-    return {"pit": False, "tire_choice": "medium", "push_level": "medium"}
+def action_to_str(action_dict: dict) -> str:
+    """Convert action dict to a compact string for logging."""
+    return json.dumps(action_dict, separators=(",", ":"))
+
+
+def run_task(task_config):
+    client = OpenAI(base_url=API_BASE_URL, api_key=API_KEY)
+    task_name = task_config["name"]
+    total_laps = task_config["laps"]
+
+    history = []
+    rewards: List[float] = []
+    steps_taken = 0
+    success = False
+
+    log_start(task=task_name, env=BENCHMARK, model=MODEL_NAME)
+
+    env = F1OpenenvEnv(base_url="http://localhost:8000").sync()
+
+    try:
+        obs = env.reset(**task_config)
+
+        for step in range(1, total_laps + 1):
+            prompt = f"""You are an F1 race engineer AI. Make strategic decisions for this lap.
+
+Race: {task_name} | Lap {step}/{total_laps} | Weather mode: {task_config['weather']}
+
+Current state:
+{obs}
+
+Respond with ONLY a JSON object (no markdown, no explanation):
+{{"pit": True/False, "tire_choice": "soft"/"medium"/"hard", "push_level": "low"/"medium"/"high"}}"""
+
+            try:
+                response = client.chat.completions.create(
+                    model=MODEL_NAME,
+                    messages=[{"role": "user", "content": prompt}],
+                    temperature=TEMPERATURE,
+                    max_tokens=MAX_TOKENS,
+                    stream=False,
+                )
+                raw_content = response.choices[0].message.content or ""
+            except Exception as exc:
+                raw_content = ""
+                if DEBUG:
+                    print(f"[DEBUG] Model request failed: {exc}", flush=True)
+
+            action_json = parse_action(raw_content)
+            action = F1OpenenvAction(**action_json)
+            action_str = action_to_str(action_json)
+
+            result = env.step(action)
+
+            reward = result.reward or 0.0
+            done = result.done
+            error = None
+
+            rewards.append(reward)
+            steps_taken = step
+
+            log_step(step=step, action=action_str, reward=reward, done=done, error=error)
+
+            history.append({
+                "observation": result.observation,
+                "reward": reward,
+                "info": result.observation.metadata
+            })
+
+            obs = result.observation
+
+            if done:
+                success = reward > 0.0
+                if DEBUG:
+                    print(f"[DEBUG] Race finished at lap {step}", flush=True)
+                break
+
+        else:
+            success = False
+
+    finally:
+        env.close()
+        log_end(success=success, steps=steps_taken, rewards=rewards)
+
+    score = grade_episode(history, total_laps)
+    return score
 
 
 if __name__ == "__main__":

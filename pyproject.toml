@@ -15,6 +15,7 @@ description = "F1 Openenv environment for OpenEnv"
 requires-python = ">=3.10"
 dependencies = [
     "openai>=2.30.0",
+    "python-dotenv>=1.0.0",
     # Core OpenEnv runtime (provides FastAPI server + HTTP client types)
     # install from github
     # "openenv-core[core] @ git+https://github.com/meta-pytorch/OpenEnv.git",
