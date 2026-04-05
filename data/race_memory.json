@@ -1,0 +1,52 @@
+[
+  {
+    "race": "bahrain_dry",
+    "final_position": 19,
+    "score": 0.4326,
+    "pit_laps": [],
+    "pit_count": 0,
+    "compounds_used": [
+      "soft",
+      "hard",
+      "medium"
+    ],
+    "total_reward": -447.5,
+    "regulation_ok": true,
+    "sc_pits_taken": 0,
+    "lesson": "Pitted on laps [] (0 stops), used ['soft', 'hard', 'medium'], finished P19, score 0.43, SC pits 0"
+  },
+  {
+    "race": "silverstone_mixed",
+    "final_position": 20,
+    "score": 0.4173,
+    "pit_laps": [],
+    "pit_count": 0,
+    "compounds_used": [
+      "soft",
+      "intermediate",
+      "hard",
+      "medium",
+      "wet"
+    ],
+    "total_reward": -615.0,
+    "regulation_ok": true,
+    "sc_pits_taken": 0,
+    "lesson": "Pitted on laps [] (0 stops), used ['soft', 'intermediate', 'hard', 'medium', 'wet'], finished P20, score 0.42, SC pits 0"
+  },
+  {
+    "race": "bahrain_dry",
+    "final_position": 1,
+    "score": 0.668,
+    "pit_laps": [],
+    "pit_count": 2,
+    "compounds_used": [
+      "hard",
+      "medium",
+      "soft"
+    ],
+    "total_reward": 119.6,
+    "regulation_ok": true,
+    "sc_pits_taken": 0,
+    "lesson": "Pitted on laps [] (2 stops), used ['hard', 'medium', 'soft'], finished P1, score 0.67, SC pits 0"
+  }
+]
