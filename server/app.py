@@ -52,6 +52,9 @@ app = create_app(
     max_concurrent_envs=1,  # increase this number to allow more concurrent WebSocket sessions
 )
 
+def main():
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
 
 def main(host: str = "0.0.0.0", port: int = 8000):
     """
