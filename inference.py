@@ -5,10 +5,6 @@ from typing import List, Optional, Dict, Any
 
 from openai import OpenAI
 from dotenv import load_dotenv
-
-from client import F1OpenenvEnv
-from models import F1OpenenvAction
-from grader import grade_episode
 from tasks import TASKS
 
 load_dotenv()
@@ -371,6 +367,11 @@ def smart_fallback(
 # Main Run Loop
 # -----------------------------------------------
 def run_task(task_config, memory: List[Dict]):
+    # Deferred imports (avoid side effects before stdout logging begins).
+    from client import F1OpenenvEnv
+    from models import F1OpenenvAction
+    from grader import grade_episode
+
     client = OpenAI(base_url=API_BASE_URL, api_key=API_KEY)
     task_name = task_config["name"]
     total_laps = task_config["laps"]
@@ -524,7 +525,7 @@ def run_task(task_config, memory: List[Dict]):
     return score, history
 
 
-if __name__ == "__main__":
+def main() -> None:
     memory = load_memory()
     log_debug(f"Loaded {len(memory)} past race(s)")
 
@@ -539,3 +540,7 @@ if __name__ == "__main__":
         memory.append(race_summary)
         save_memory(memory)
         log_debug(f"Saved race summary. Total races in memory: {len(memory)}")
+
+
+if __name__ == "__main__":
+    main()
