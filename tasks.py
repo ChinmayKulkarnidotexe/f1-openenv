@@ -55,7 +55,7 @@ def chaos_race_config() -> Dict:
     """
     return {
         "name": "monaco_chaos",
-        "laps": 45,
+        "laps": 50,
         "weather": "dynamic",
         "rain_probability": 0.35,
         "safety_car_probability": 0.08,

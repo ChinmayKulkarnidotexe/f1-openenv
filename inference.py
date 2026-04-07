@@ -25,7 +25,7 @@ HISTORY_WINDOW = 3
 MEMORY_FILE = os.path.join(os.path.dirname(__file__), "data", "race_memory.json")
 MAX_MEMORY_RACES = 10
 
-DEBUG = True
+DEBUG = False
 
 # -----------------------------------------------
 # System Prompt (compact, token-efficient)
@@ -36,7 +36,7 @@ RULES:
 - Dry race: must use 2+ different dry compounds (soft/medium/hard). Wet tires don't count.
 - Wet race (>30% rain laps): 2-compound rule waived.
 
-TIRES (dry track):
+TIRES:
 soft: fastest, cliff at 60% wear (~25 laps)
 medium: balanced, cliff at 75% wear (~30 laps)
 hard: slowest, cliff at 85% wear (~50 laps)
@@ -48,7 +48,7 @@ Past the cliff, lap times spike +5-15s. Always pit before cliff.
 PIT STRATEGY:
 - Optimal: 2-3 stops per race. 0 or 1 stop is penalized. 4+ is excessive.
 - NEVER pit on consecutive laps.
-- Pit under safety_car (cost 8s) or vsc (cost 13s) instead of green (cost 22s).
+- Try to pit under safety_car (cost 8s) or vsc (cost 13s) instead of green (cost 22s).
 
 PUSH: high=-1.5s but +40% wear. low=+1s but -25% wear. medium=baseline.
 
@@ -60,45 +60,30 @@ OUTPUT: respond with only a JSON object, no other text.
 # Logging
 # -----------------------------------------------
 def log_start(task: str, env: str, model: str) -> None:
-    print("\n" + "=" * 95)
-    print(f"  RACE START: {task}")
-    print(f"  Env: {env} | Model: {model}")
-    print("=" * 95)
-    print(f" {'LAP':<4} | {'STRATEGY':<30} | {'RWD':<7} | {'RACE INFO'}")
-    print("-" * 95)
+    # Hackathon stdout contract: structured, single-line blocks only.
+    print(f"[START] task={task} env={env} model={model}", flush=True)
 
 
 def log_step(step: int, action: str, reward: float, done: bool, error: Optional[str], obs: Optional[Any] = None) -> None:
-    try:
-        act = json.loads(action)
-        pit_str = "PIT!" if act.get("pit") else "Stay"
-        action_formatted = f"[{pit_str:<4}] {act.get('tire_choice', ''):<12} {act.get('push_level', ''):<6}"
-    except Exception:
-        action_formatted = str(action)[:30]
-
-    obs_info = ""
-    if obs:
-        w = "RAIN" if getattr(obs, "weather", "") != "dry" else "DRY"
-        ts = getattr(obs, 'track_status', 'green')
-        sc = " SC" if ts in ("safety_car", "vsc") else ""
-        obs_info = (
-            f"P{getattr(obs, 'position', '?'):<2} "
-            f"W:{getattr(obs, 'tire_wear', 0):>3.0%} "
-            f"F:{getattr(obs, 'fuel', 0):>3.0f}kg "
-            f"G:{getattr(obs, 'gap_ahead', 0):.1f}s "
-            f"{w}{sc}"
-        )
-
-    err_str = f" ERR:{error}" if error else ""
-    print(f" L{step:<3} | {action_formatted:<30} | {reward:>+5.1f}  | {obs_info}{err_str}", flush=True)
+    # Keep the line single-line (no embedded newlines).
+    safe_action = str(action).replace("\n", " ").replace("\r", " ")
+    error_val = error if error else "null"
+    done_val = str(done).lower()
+    print(
+        f"[STEP] step={step} action={safe_action} reward={reward:.2f} done={done_val} error={error_val}",
+        flush=True,
+    )
 
 
 def log_end(success: bool, steps: int, rewards: List[float]) -> None:
-    total_reward = sum(rewards)
-    print("-" * 95)
-    status = "POINTS" if success else "NO POINTS"
-    print(f"  RACE END: {steps} laps | {status} | Total reward: {total_reward:.1f}")
-    print("=" * 95 + "\n")
+    rewards_str = ",".join(f"{r:.2f}" for r in rewards)
+    print(f"[END] success={str(success).lower()} steps={steps} rewards={rewards_str}", flush=True)
+
+
+def log_debug(msg: str) -> None:
+    # Debug output is intentionally suppressed to keep stdout machine-parseable.
+    if DEBUG:
+        print(f"[DEBUG] {msg}".replace("\n", " ").replace("\r", " "), flush=True)
 
 
 # -----------------------------------------------
@@ -167,9 +152,9 @@ def build_history_context(history: list, window: int = HISTORY_WINDOW) -> str:
         pit_flag = " PIT" if h["info"].get("pitted") else ""
         lines.append(
             f"L{obs.lap}: P{obs.position} {obs.tire_type} {obs.tire_wear:.0%}w "
-            f"fuel:{obs.fuel:.0f} {obs.weather} rwd:{h['reward']:.1f}{pit_flag}"
+            f"fuel:{obs.fuel:.0f} {obs.weather} reward:{h['reward']:.1f}{pit_flag}"
         )
-    return " | ".join(lines)
+    return "\n".join(lines)
 
 
 # -----------------------------------------------
@@ -479,14 +464,13 @@ def run_task(task_config, memory: List[Dict]):
                 raw_content = response.choices[0].message.content or ""
             except Exception as exc:
                 raw_content = ""
-                if DEBUG:
-                    print(f"[DEBUG] Model error: {exc}", flush=True)
+                log_debug(f"Model error: {exc}")
 
             action_json = None
             if raw_content:
                 action_json = parse_action(raw_content)
-                if not action_json and DEBUG:
-                    print(f"[DEBUG] Parse failed, using fallback. Raw: {raw_content[:100]}", flush=True)
+                if not action_json:
+                    log_debug(f"Parse failed, using fallback. Raw: {raw_content[:100]}")
 
             if not action_json:
                 action_json = smart_fallback(
@@ -499,8 +483,7 @@ def run_task(task_config, memory: List[Dict]):
                     sc_laps_remaining=getattr(obs, "sc_laps_remaining", 0),
                     pit_stops_made=pit_stops_now, last_pit_lap=last_pit_lap,
                 )
-                if DEBUG:
-                    print(f"[DEBUG] Fallback: {action_json}", flush=True)
+                log_debug(f"Fallback: {action_json}")
 
             action = F1OpenenvAction(**action_json)
             action_str = action_to_str(action_json)
@@ -525,8 +508,7 @@ def run_task(task_config, memory: List[Dict]):
             obs = result.observation
 
             if done:
-                if DEBUG:
-                    print(f"[DEBUG] Race finished at lap {step}", flush=True)
+                log_debug(f"Race finished at lap {step}")
                 break
 
     finally:
@@ -544,18 +526,16 @@ def run_task(task_config, memory: List[Dict]):
 
 if __name__ == "__main__":
     memory = load_memory()
-    print(f"[MEMORY] Loaded {len(memory)} past race(s)")
+    log_debug(f"Loaded {len(memory)} past race(s)")
 
     for task in TASKS:
         task_config = task()
-        print(f"\n{'='*60}")
-        print(f" Starting task: {task_config['name']} ({task_config['laps']} laps)")
-        print(f"{'='*60}")
+        log_debug(f"Starting task: {task_config['name']} ({task_config['laps']} laps)")
 
         score, history = run_task(task_config, memory)
-        print(f"\n{task_config['name']} -> Score: {score}")
+        log_debug(f"{task_config['name']} -> Score: {score}")
 
         race_summary = summarize_race(task_config["name"], history, score)
         memory.append(race_summary)
         save_memory(memory)
-        print(f"[MEMORY] Saved race summary. Total races in memory: {len(memory)}")
+        log_debug(f"Saved race summary. Total races in memory: {len(memory)}")
