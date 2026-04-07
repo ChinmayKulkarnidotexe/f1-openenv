@@ -3,11 +3,7 @@ import re
 import json
 from typing import List, Optional, Dict, Any
 
-from openai import OpenAI
-from dotenv import load_dotenv
 from tasks import TASKS
-
-load_dotenv()
 
 API_BASE_URL = os.getenv("API_BASE_URL") or "https://router.huggingface.co/v1"
 API_KEY      = os.getenv("HF_TOKEN") or os.getenv("OPENAI_API_KEY") or os.getenv("API_KEY")
@@ -367,12 +363,6 @@ def smart_fallback(
 # Main Run Loop
 # -----------------------------------------------
 def run_task(task_config, memory: List[Dict]):
-    # Deferred imports (avoid side effects before stdout logging begins).
-    from client import F1OpenenvEnv
-    from models import F1OpenenvAction
-    from grader import grade_episode
-
-    client = OpenAI(base_url=API_BASE_URL, api_key=API_KEY)
     task_name = task_config["name"]
     total_laps = task_config["laps"]
 
@@ -383,8 +373,14 @@ def run_task(task_config, memory: List[Dict]):
 
     log_start(task=task_name, env=BENCHMARK, model=MODEL_NAME)
 
-    system_prompt = SYSTEM_PROMPT_BASE + build_memory_context(memory, current_race=task_name)
+    # Deferred imports (avoid side effects before stdout logging begins).
+    from openai import OpenAI
+    from client import F1OpenenvEnv
+    from models import F1OpenenvAction
+    from grader import grade_episode
 
+    client = OpenAI(base_url=API_BASE_URL, api_key=API_KEY)
+    system_prompt = SYSTEM_PROMPT_BASE + build_memory_context(memory, current_race=task_name)
     env = F1OpenenvEnv(base_url="http://localhost:8000").sync()
 
     try:
@@ -528,6 +524,11 @@ def run_task(task_config, memory: List[Dict]):
 def main() -> None:
     memory = load_memory()
     log_debug(f"Loaded {len(memory)} past race(s)")
+
+    if not TASKS:
+        log_start(task="unknown-task", env=BENCHMARK, model=MODEL_NAME)
+        log_end(success=False, steps=0, rewards=[])
+        return
 
     for task in TASKS:
         task_config = task()
