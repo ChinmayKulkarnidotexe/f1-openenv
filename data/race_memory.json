@@ -126,5 +126,20 @@
     "regulation_ok": true,
     "sc_pits_taken": 0,
     "lesson": "Pitted on laps [] (1 stops), used ['soft', 'medium'], finished P1, score 0.72, SC pits 0"
+  },
+  {
+    "race": "bahrain_dry",
+    "final_position": 1,
+    "score": 0.6514,
+    "pit_laps": [],
+    "pit_count": 4,
+    "compounds_used": [
+      "soft",
+      "medium"
+    ],
+    "total_reward": 101.4,
+    "regulation_ok": true,
+    "sc_pits_taken": 0,
+    "lesson": "Pitted on laps [] (4 stops), used ['soft', 'medium'], finished P1, score 0.65, SC pits 0"
   }
 ]
