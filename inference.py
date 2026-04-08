@@ -74,7 +74,7 @@ def log_end(success: bool, steps: int, rewards: List[float], score: Optional[flo
         print(f"[END] success={str(success).lower()} steps={steps} rewards={rewards_str}", flush=True)
         return
     print(
-        f"[END] success={str(success).lower()} steps={steps} rewards={rewards_str} score={score}",
+        f"[END] success={str(success).lower()} steps={steps} rewards={rewards_str} score={score:.2f}",
         flush=True,
     )
 

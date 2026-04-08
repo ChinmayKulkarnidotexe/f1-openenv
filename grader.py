@@ -15,7 +15,7 @@ Returns a score in [0.0, 1.0].
 from typing import List, Dict, Set
 
 
-def _clamp_open_interval(score: float, eps: float = 1e-6) -> float:
+def _clamp_open_interval(score: float, eps: float = 0.01) -> float:
     """
     Clamp to the open interval (0, 1) for hackathon validators that reject 0.0/1.0.
     """
@@ -217,7 +217,8 @@ def grade_episode(history: list, total_laps: int = 50) -> float:
     # print(f"  │ TOTAL SCORE: {score:.4f}")
     # print(f"  └──────────────────────────────────────────────────────────────")
 
-    # First clamp to [0, 1], then to (0, 1) (validator rejects endpoints).
+    # Clamp to [0, 1], then to (0, 1), and keep 2 decimal places.
+    # We clamp to 0.01..0.99 so rounding cannot produce 0.00 or 1.00.
     score = min(max(score, 0.0), 1.0)
-    score = _clamp_open_interval(score)
-    return round(score, 6)
+    score = _clamp_open_interval(score, eps=0.01)
+    return round(score, 2)
