@@ -4,17 +4,6 @@ import json
 from typing import List, Optional, Dict, Any
 from dotenv import load_dotenv
 
-TASKS = [{
-        "name": "bahrain_dry",
-        "laps": 30,
-        "weather": "dry",
-        "rain_probability": 0.0,
-        "safety_car_probability": 0.03,
-        "start_position": 10,
-        "start_tire": "medium",
-        "start_fuel": 110.0,
-    }]
-
 load_dotenv()
 
 API_BASE_URL = os.getenv("API_BASE_URL") or "https://router.huggingface.co/v1"
@@ -384,12 +373,16 @@ def run_task(task_config, memory: List[Dict]):
 
     log_start(task=task_name, env=BENCHMARK, model=MODEL_NAME)
 
-    from openai import OpenAI
     from client import F1OpenenvEnv
     from models import F1OpenenvAction
     from grader import grade_episode
 
-    client = OpenAI(base_url=API_BASE_URL, api_key=API_KEY)
+    # LLM is optional for validator environments; fall back to heuristics if no key.
+    client = None
+    if API_KEY:
+        from openai import OpenAI
+        client = OpenAI(base_url=API_BASE_URL, api_key=API_KEY)
+
     system_prompt = SYSTEM_PROMPT_BASE + build_memory_context(memory, current_race=task_name)
     env = F1OpenenvEnv(base_url="http://localhost:8000").sync()
 
@@ -457,21 +450,23 @@ def run_task(task_config, memory: List[Dict]):
                 f"History: {history_context}"
             )
 
-            try:
-                response = client.chat.completions.create(
-                    model=MODEL_NAME,
-                    messages=[
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": user_prompt},
-                    ],
-                    temperature=TEMPERATURE,
-                    max_tokens=MAX_TOKENS,
-                    stream=False,
-                )
-                raw_content = response.choices[0].message.content or ""
-            except Exception as exc:
-                raw_content = ""
-                log_debug(f"Model error: {exc}")
+            raw_content = ""
+            if client is not None:
+                try:
+                    response = client.chat.completions.create(
+                        model=MODEL_NAME,
+                        messages=[
+                            {"role": "system", "content": system_prompt},
+                            {"role": "user", "content": user_prompt},
+                        ],
+                        temperature=TEMPERATURE,
+                        max_tokens=MAX_TOKENS,
+                        stream=False,
+                    )
+                    raw_content = response.choices[0].message.content or ""
+                except Exception as exc:
+                    raw_content = ""
+                    log_debug(f"Model error: {exc}")
 
             action_json = None
             if raw_content:
@@ -518,17 +513,47 @@ def run_task(task_config, memory: List[Dict]):
                 log_debug(f"Race finished at lap {step}")
                 break
 
+    except Exception as exc:
+        # Never let exceptions break the stdout contract (avoid tracebacks to stderr).
+        log_debug(f"Run failed: {exc}")
+        success = False
     finally:
-        env.close()
+        try:
+            env.close()
+        except Exception as exc:
+            log_debug(f"Env close failed: {exc}")
 
         total_reward = sum(rewards)
         final_position = history[-1]["observation"].position if history else 20
-        success = total_reward > 0 or final_position <= 10
+        success = bool(success or total_reward > 0 or final_position <= 10)
 
         log_end(success=success, steps=steps_taken, rewards=rewards)
 
-    score = grade_episode(history, total_laps)
+    try:
+        score = grade_episode(history, total_laps)
+    except Exception as exc:
+        log_debug(f"Grading failed: {exc}")
+        score = 0.0
     return score, history
+
+def dry_race_config() -> Dict:
+    """
+    Clean dry race (Bahrain-style).
+    Focus: tire strategy, 2-3 pit stops, compound regulation.
+    No rain, very low SC probability.
+    """
+    return {
+        "name": "bahrain_dry",
+        "laps": 30,
+        "weather": "dry",
+        "rain_probability": 0.0,
+        "safety_car_probability": 0.03,
+        "start_position": 10,
+        "start_tire": "medium",
+        "start_fuel": 110.0,
+    }
+
+TASKS = [dry_race_config]
 
 
 def main() -> None:
@@ -541,7 +566,7 @@ def main() -> None:
         return
 
     for task in TASKS:
-        task_config = task
+        task_config = task()
         log_debug(f"Starting task: {task_config['name']} ({task_config['laps']} laps)")
 
         score, history = run_task(task_config, memory)
