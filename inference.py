@@ -73,7 +73,7 @@ def log_step(step: int, action: str, reward: float, done: bool, error: Optional[
     error_val = error if error else "null"
     done_val = str(done).lower()
     print(
-        f"[STEP] step={step} action={safe_action} reward={reward:.2f} done={done_val} error={error_val}",
+        f"[STEP] step={step} reward={reward:.2f} done={done_val} error={error_val}",
         flush=True,
     )
 
