@@ -2,13 +2,26 @@ import os
 import re
 import json
 from typing import List, Optional, Dict, Any
+from dotenv import load_dotenv
 
-from tasks import TASKS
+TASKS = [{
+        "name": "bahrain_dry",
+        "laps": 30,
+        "weather": "dry",
+        "rain_probability": 0.0,
+        "safety_car_probability": 0.03,
+        "start_position": 10,
+        "start_tire": "medium",
+        "start_fuel": 110.0,
+    }]
+
+load_dotenv()
 
 API_BASE_URL = os.getenv("API_BASE_URL") or "https://router.huggingface.co/v1"
 API_KEY      = os.getenv("HF_TOKEN") or os.getenv("OPENAI_API_KEY") or os.getenv("API_KEY")
 MODEL_NAME   = os.getenv("MODEL_NAME", "qwen3:0.6b")
 BENCHMARK    = os.getenv("BENCHMARK", "f1-openenv")
+TASK_NAME    = os.getenv("TASK_NAME", "bahrain_dry")
 
 TEMPERATURE = 0.2
 MAX_TOKENS = 512
@@ -52,12 +65,10 @@ OUTPUT: respond with only a JSON object, no other text.
 # Logging
 # -----------------------------------------------
 def log_start(task: str, env: str, model: str) -> None:
-    # Hackathon stdout contract: structured, single-line blocks only.
     print(f"[START] task={task} env={env} model={model}", flush=True)
 
 
 def log_step(step: int, action: str, reward: float, done: bool, error: Optional[str], obs: Optional[Any] = None) -> None:
-    # Keep the line single-line (no embedded newlines).
     safe_action = str(action).replace("\n", " ").replace("\r", " ")
     error_val = error if error else "null"
     done_val = str(done).lower()
@@ -373,7 +384,6 @@ def run_task(task_config, memory: List[Dict]):
 
     log_start(task=task_name, env=BENCHMARK, model=MODEL_NAME)
 
-    # Deferred imports (avoid side effects before stdout logging begins).
     from openai import OpenAI
     from client import F1OpenenvEnv
     from models import F1OpenenvAction
@@ -531,7 +541,7 @@ def main() -> None:
         return
 
     for task in TASKS:
-        task_config = task()
+        task_config = task
         log_debug(f"Starting task: {task_config['name']} ({task_config['laps']} laps)")
 
         score, history = run_task(task_config, memory)
