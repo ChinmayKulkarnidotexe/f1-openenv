@@ -65,7 +65,7 @@ TIRE_CLIFF = {
 
 # Pace advantage vs medium (seconds per lap, negative = faster)
 TIRE_PACE_OFFSET = {
-    "soft":         -1.5,
+    "soft":         -1.0,
     "medium":        0.0,
     "hard":         +1.2,
     "intermediate": +4.0,
@@ -73,7 +73,7 @@ TIRE_PACE_OFFSET = {
 }
 
 PUSH_WEAR_FACTOR = {"low": 0.75, "medium": 1.0, "high": 1.40}
-PUSH_PACE_OFFSET = {"low": +1.0, "medium": 0.0, "high": -1.5}
+PUSH_PACE_OFFSET = {"low": +0.6, "medium": 0.0, "high": -0.8}
 
 FUEL_CONSUMPTION = {"low": 1.5, "medium": 1.85, "high": 2.4}
 
@@ -85,14 +85,25 @@ PIT_TIME_LOSS = {"green": 22.0, "vsc": 13.0, "safety_car": 8.0, "red_flag": 0.0}
 
 SC_DURATION_RANGE = (3, 6)
 
+# Safety car restrictions
+SC_BLOCKED_LAPS = 3        # No SC in the first N laps
+SC_COOLDOWN_LAPS = 3       # Minimum gap between SC periods
+
+# Player pace advantage (seconds per lap subtracted from player lap time).
+# 0.55s/lap provides strong overtaking ability: ~1 position every 2-3 laps,
+# accounting for dirty air and DRS effects.
+PLAYER_PACE_ADVANTAGE = 0.55
+
 
 # ====================================================================
-# WEATHER TRANSITIONS (Markov chain)
+# WEATHER TRANSITIONS (Markov chain -- tuned for realism)
 # ====================================================================
+# Real F1 weather is sticky: conditions persist for many laps before
+# changing. These probabilities prevent chaotic lap-by-lap oscillation.
 WEATHER_TRANSITIONS = {
-    "dry":        {"dry": 0.90, "light_rain": 0.10, "heavy_rain": 0.00},
-    "light_rain": {"dry": 0.25, "light_rain": 0.55, "heavy_rain": 0.20},
-    "heavy_rain": {"dry": 0.00, "light_rain": 0.30, "heavy_rain": 0.70},
+    "dry":        {"dry": 0.96, "light_rain": 0.04, "heavy_rain": 0.00},
+    "light_rain": {"dry": 0.10, "light_rain": 0.82, "heavy_rain": 0.08},
+    "heavy_rain": {"dry": 0.00, "light_rain": 0.12, "heavy_rain": 0.88},
 }
 
 
@@ -100,44 +111,74 @@ WEATHER_TRANSITIONS = {
 # FIELD SIMULATION (19 AI opponents)
 # ====================================================================
 
-def _compute_expected_player_laptime(fuel: float = 110.0) -> float:
+def _compute_expected_player_laptime(fuel: float = 110.0, start_tire: str = "medium") -> float:
     """
-    Compute what the player's lap time would be on lap 1 with medium tires,
-    0% wear, full fuel, medium push, green track, dry weather.
+    Compute what the player's lap time would be on lap 1 with their
+    starting tire, 0% wear, full fuel, medium push, green track, dry weather.
     This is used to calibrate the AI field so positions are realistic.
     """
     base = 90.0
-    compound_offset = TIRE_PACE_OFFSET["medium"]  # 0.0
-    wear_offset = 0.0  # fresh tires
+    compound_offset = TIRE_PACE_OFFSET.get(start_tire, 0.0)
+    wear_offset = 0.2  # fresh tires still have minor scrub
     fuel_offset = fuel * FUEL_WEIGHT_EFFECT
-    push_offset = PUSH_PACE_OFFSET["medium"]  # 0.0
+    push_offset = PUSH_PACE_OFFSET["medium"]
     return base + compound_offset + wear_offset + fuel_offset + push_offset
 
 
-def _generate_field(n_cars: int = 20, start_position: int = 10, start_fuel: float = 110.0) -> List[Dict]:
+def _generate_field(
+    n_cars: int = 20,
+    start_position: int = 10,
+    start_fuel: float = 110.0,
+    start_tire: str = "medium",
+) -> List[Dict]:
     """
     Generate a 20-car field calibrated to the player's expected performance.
 
     The field is spaced so that:
-      - P1 car is ~2s/lap faster than the player's initial pace
-      - P20 car is ~2s/lap slower
-      - Player's base pace slots in at their starting position
-    """
-    expected_player = _compute_expected_player_laptime(start_fuel)
+      - P1 car is ~1.75s/lap faster than P10 (the player's typical start)
+      - P20 car is ~1.75s/lap slower than P10
+      - Total spread: 3.5s across 20 cars (~0.18s between adjacent positions)
 
-    # Total spread across the field: 4s (P1 is 2s faster, P20 is 2s slower)
-    spread = 4.0
+    Each car also gets a starting cumulative-time stagger to simulate
+    grid gaps at race start (prevents instant overtakes on lap 1).
+    """
+    expected_player = _compute_expected_player_laptime(start_fuel, start_tire)
+
+    # Total spread across the field: 3.5s (realistic F1 quali spread)
+    spread = 3.5
     fastest = expected_player - spread * (start_position - 1) / (n_cars - 1)
+
+    # Tier-based consistency: top teams are more consistent
+    tier_consistency = {
+        "top":    (0.08, 0.15),   # positions 1-6
+        "mid":    (0.15, 0.25),   # positions 7-14
+        "back":   (0.25, 0.40),   # positions 15-20
+    }
 
     field = []
     for i in range(n_cars):
         # Linear spread from fastest to slowest
         base_pace = fastest + (i / (n_cars - 1)) * spread
-        consistency = random.uniform(0.2, 0.5)
+
+        # Tier-based consistency
+        if i < 6:
+            tier = tier_consistency["top"]
+        elif i < 14:
+            tier = tier_consistency["mid"]
+        else:
+            tier = tier_consistency["back"]
+        consistency = random.uniform(*tier)
+
+        # Starting time stagger: ~0.4s per grid position (simulates
+        # reaction times and grid gaps before turn 1).
+        # Index 0 is the player slot; AI cars are indices 1-19.
+        # But we place all cars in grid order for cumulative time.
+        starting_stagger = i * 0.4
+
         field.append({
             "base_pace": base_pace,
             "consistency": consistency,
-            "cumulative_time": 0.0,
+            "cumulative_time": starting_stagger,
             "tire_age": 0,
             "fuel": start_fuel,
             "has_pitted": False,
@@ -193,6 +234,7 @@ class F1OpenenvEnvironment(Environment):
         self.position = max(1, min(20, start_position))
         self.tire_type = start_tire
         self.tire_wear = 0.0
+        self.ai_pits_this_lap = 0
         self.tire_age = 0
         self.fuel = start_fuel
         self.done = False
@@ -221,10 +263,14 @@ class F1OpenenvEnvironment(Environment):
         self.incident: str = "none"
         self.sc_laps_remaining = 0
         self.safety_car = False
+        self.sc_last_ended_lap = -SC_COOLDOWN_LAPS  # allow SC after cooldown
 
         # Field -- calibrated to player's expected lap time
-        self.field = _generate_field(20, self.position, start_fuel)
-        self.player_cumulative_time = 0.0
+        self.field = _generate_field(20, self.position, start_fuel, start_tire)
+        # Player starts with stagger matching their grid position
+        self.player_cumulative_time = (self.position - 1) * 0.4
+        self._gap_ahead = 0.0
+        self._gap_behind = 0.0
 
         # Lap time tracking
         self.last_lap_time: Optional[float] = None
@@ -344,21 +390,25 @@ class F1OpenenvEnvironment(Environment):
 
         probs = WEATHER_TRANSITIONS[self.weather].copy()
 
+        # Scale rain onset probability by the task's rain_probability setting.
+        # Base transition dry->light_rain is 0.04; scale relative to that.
         if self.weather == "dry":
-            rain_prob = probs["light_rain"] * (self.rain_probability / 0.1)
-            probs["light_rain"] = min(rain_prob, 0.4)
+            scale = self.rain_probability / 0.25  # 0.25 is "moderate" baseline
+            rain_prob = probs["light_rain"] * scale
+            probs["light_rain"] = min(rain_prob, 0.15)  # cap to prevent chaos
             probs["dry"] = 1.0 - probs["light_rain"] - probs["heavy_rain"]
 
         states = list(probs.keys())
         weights = [probs[s] for s in states]
         self.weather = random.choices(states, weights=weights)[0]
 
+        # Track wetness evolves gradually
         if self.weather == "heavy_rain":
-            self.track_wetness = min(1.0, self.track_wetness + 0.3)
+            self.track_wetness = min(1.0, self.track_wetness + 0.15)
         elif self.weather == "light_rain":
-            self.track_wetness = min(1.0, self.track_wetness + 0.1)
+            self.track_wetness = min(1.0, self.track_wetness + 0.05)
         else:
-            self.track_wetness = max(0.0, self.track_wetness - 0.35)
+            self.track_wetness = max(0.0, self.track_wetness - 0.10)
 
     # ----------------------------------------------------------------
     # SAFETY CAR
@@ -370,6 +420,13 @@ class F1OpenenvEnvironment(Environment):
                 self.track_status = "green"
                 self.incident = "none"
                 self.safety_car = False
+                self.sc_last_ended_lap = self.lap
+            return
+
+        # Block SC during opening laps and enforce cooldown
+        if self.lap <= SC_BLOCKED_LAPS:
+            return
+        if (self.lap - self.sc_last_ended_lap) < SC_COOLDOWN_LAPS:
             return
 
         if self.track_status == "green" and random.random() < self.safety_car_probability:
@@ -443,7 +500,28 @@ class F1OpenenvEnvironment(Environment):
         lap_time = (
             base + compound_offset + weather_offset + wear_offset
             + fuel_offset + push_offset + sc_offset + noise + pit_loss
+            - PLAYER_PACE_ADVANTAGE
         )
+
+        # Startup Penalty - reduced so player holds position at race start
+        if self.lap == 1:
+            lap_time += random.uniform(0.1, 0.3) + (self.position * 0.02)
+        elif self.lap == 2:
+            lap_time += random.uniform(0.05, 0.15)
+
+        # Dirty air + DRS system (realistic F1 overtaking model)
+        # Dirty air hurts aero, but DRS on straights compensates when close
+        if self._gap_ahead > 0:
+            if self._gap_ahead < 0.5:
+                # Very close: dirty air -0.5s but DRS gives -0.6s = net gain
+                lap_time += 0.5     # reduced dirty air
+                lap_time -= 0.6     # DRS boost (net: -0.1s advantage)
+            elif self._gap_ahead < 1.0:
+                # DRS range: dirty air -0.4s but DRS gives -0.5s
+                lap_time += 0.4     # moderate dirty air
+                lap_time -= 0.5     # DRS boost (net: -0.1s advantage)
+            elif self._gap_ahead < 2.0:
+                lap_time += 0.15    # mild turbulence, no DRS
 
         return max(80.0, lap_time)
 
@@ -451,6 +529,8 @@ class F1OpenenvEnvironment(Environment):
     # FIELD
     # ----------------------------------------------------------------
     def _update_field(self):
+        self.ai_pits_this_lap = 0
+
         for i, car in enumerate(self.field):
             if i == 0 or car["retired"]:
                 continue
@@ -461,8 +541,10 @@ class F1OpenenvEnvironment(Environment):
             # AI fuel burn (same rate as player medium push)
             car["fuel"] = max(0.0, car["fuel"] - 1.85)
 
-            # AI fuel weight effect (same physics as player)
-            lap_time += car["fuel"] * FUEL_WEIGHT_EFFECT
+            # NOTE: fuel weight is already baked into base_pace calibration.
+            # Only apply the *delta* from starting fuel (lighter car = faster).
+            fuel_delta = max(0.0, 110.0 - car["fuel"])  # how much fuel burned
+            lap_time -= fuel_delta * FUEL_WEIGHT_EFFECT  # lighter = faster
 
             # Weather penalty for AI (they run medium compounds)
             if self.weather == "light_rain":
@@ -476,21 +558,29 @@ class F1OpenenvEnvironment(Environment):
             elif self.track_status == "vsc":
                 lap_time = 102.0
 
-            # AI tire age penalty (simplified linear)
+            # AI tire age penalty (non-linear, models cliff)
             car["tire_age"] += 1
-            age_penalty = max(0, (car["tire_age"] - 18)) * 0.12
+            if car["tire_age"] > 22:
+                # Past cliff: accelerating degradation
+                overshoot = car["tire_age"] - 22
+                age_penalty = 0.15 * overshoot + 0.02 * overshoot ** 1.5
+            elif car["tire_age"] > 15:
+                age_penalty = max(0, (car["tire_age"] - 15)) * 0.06
+            else:
+                age_penalty = 0.0
             lap_time += age_penalty
 
             # AI pit stops
             if car["pitting_cooldown"] > 0:
                 car["pitting_cooldown"] -= 1
-            elif car["tire_age"] > random.randint(18, 30):
+            elif car["tire_age"] > random.randint(18, 28):
                 pit_cost = PIT_TIME_LOSS.get(self.track_status, 22.0)
                 lap_time += pit_cost
                 car["tire_age"] = 0
                 car["fuel"] = max(0.0, car["fuel"])
                 car["has_pitted"] = True
                 car["pitting_cooldown"] = 8
+                self.ai_pits_this_lap += 1
 
             car["cumulative_time"] += lap_time
 
@@ -666,6 +756,7 @@ class F1OpenenvEnvironment(Environment):
                 "track_wetness": round(self.track_wetness, 2),
                 "pit_history": list(self.pit_history),
                 "consecutive_pits": self.consecutive_pit_count,
+                "ai_pits_this_lap": self.ai_pits_this_lap,
             },
         )
 
