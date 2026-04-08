@@ -15,6 +15,17 @@ Returns a score in [0.0, 1.0].
 from typing import List, Dict, Set
 
 
+def _clamp_open_interval(score: float, eps: float = 1e-6) -> float:
+    """
+    Clamp to the open interval (0, 1) for hackathon validators that reject 0.0/1.0.
+    """
+    if score <= 0.0:
+        return eps
+    if score >= 1.0:
+        return 1.0 - eps
+    return score
+
+
 def grade_episode(history: list, total_laps: int = 50) -> float:
     """
     Grade a completed race episode.
@@ -27,10 +38,10 @@ def grade_episode(history: list, total_laps: int = 50) -> float:
         total_laps: total laps in the race
 
     Returns:
-        Score in [0.0, 1.0]
+        Score strictly within (0.0, 1.0)
     """
     if not history:
-        return 0.0
+        return _clamp_open_interval(0.0)
 
     final_obs = history[-1]["observation"]
     all_infos = [h["info"] for h in history]
@@ -206,4 +217,7 @@ def grade_episode(history: list, total_laps: int = 50) -> float:
     # print(f"  │ TOTAL SCORE: {score:.4f}")
     # print(f"  └──────────────────────────────────────────────────────────────")
 
-    return round(min(max(score, 0.0), 1.0), 4)
+    # First clamp to [0, 1], then to (0, 1) (validator rejects endpoints).
+    score = min(max(score, 0.0), 1.0)
+    score = _clamp_open_interval(score)
+    return int(round(score, 6))

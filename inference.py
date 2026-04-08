@@ -534,7 +534,7 @@ def run_task(task_config, memory: List[Dict]):
         score = grade_episode(history, total_laps)
     except Exception as exc:
         log_debug(f"Grading failed: {exc}")
-        score = 0.0
+        score = 0
     return score, history
 
 
