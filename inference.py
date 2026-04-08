@@ -2,6 +2,7 @@ import os
 import re
 import json
 from typing import List, Optional, Dict, Any
+from tasks import TASKS
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -535,25 +536,6 @@ def run_task(task_config, memory: List[Dict]):
         log_debug(f"Grading failed: {exc}")
         score = 0.0
     return score, history
-
-def dry_race_config() -> Dict:
-    """
-    Clean dry race (Bahrain-style).
-    Focus: tire strategy, 2-3 pit stops, compound regulation.
-    No rain, very low SC probability.
-    """
-    return {
-        "name": "bahrain_dry",
-        "laps": 30,
-        "weather": "dry",
-        "rain_probability": 0.0,
-        "safety_car_probability": 0.03,
-        "start_position": 10,
-        "start_tire": "medium",
-        "start_fuel": 110.0,
-    }
-
-TASKS = [dry_race_config]
 
 
 def main() -> None:

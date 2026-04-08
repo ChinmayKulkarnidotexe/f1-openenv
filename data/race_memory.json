@@ -1,40 +1,6 @@
 [
   {
     "race": "bahrain_dry",
-    "final_position": 19,
-    "score": 0.4326,
-    "pit_laps": [],
-    "pit_count": 0,
-    "compounds_used": [
-      "soft",
-      "hard",
-      "medium"
-    ],
-    "total_reward": -447.5,
-    "regulation_ok": true,
-    "sc_pits_taken": 0,
-    "lesson": "Pitted on laps [] (0 stops), used ['soft', 'hard', 'medium'], finished P19, score 0.43, SC pits 0"
-  },
-  {
-    "race": "silverstone_mixed",
-    "final_position": 20,
-    "score": 0.4173,
-    "pit_laps": [],
-    "pit_count": 0,
-    "compounds_used": [
-      "soft",
-      "intermediate",
-      "hard",
-      "medium",
-      "wet"
-    ],
-    "total_reward": -615.0,
-    "regulation_ok": true,
-    "sc_pits_taken": 0,
-    "lesson": "Pitted on laps [] (0 stops), used ['soft', 'intermediate', 'hard', 'medium', 'wet'], finished P20, score 0.42, SC pits 0"
-  },
-  {
-    "race": "bahrain_dry",
     "final_position": 1,
     "score": 0.668,
     "pit_laps": [],
@@ -141,5 +107,53 @@
     "regulation_ok": true,
     "sc_pits_taken": 0,
     "lesson": "Pitted on laps [] (4 stops), used ['soft', 'medium'], finished P1, score 0.65, SC pits 0"
+  },
+  {
+    "race": "bahrain_dry",
+    "final_position": 1,
+    "score": 0.6243,
+    "pit_laps": [],
+    "pit_count": 2,
+    "compounds_used": [
+      "soft",
+      "medium"
+    ],
+    "total_reward": 73.0,
+    "regulation_ok": true,
+    "sc_pits_taken": 0,
+    "lesson": "Pitted on laps [] (2 stops), used ['soft', 'medium'], finished P1, score 0.62, SC pits 0"
+  },
+  {
+    "race": "silverstone_mixed",
+    "final_position": 19,
+    "score": 0.4167,
+    "pit_laps": [],
+    "pit_count": 10,
+    "compounds_used": [
+      "intermediate",
+      "wet",
+      "soft",
+      "medium"
+    ],
+    "total_reward": -184.8,
+    "regulation_ok": true,
+    "sc_pits_taken": 0,
+    "lesson": "Pitted on laps [] (10 stops), used ['intermediate', 'wet', 'soft', 'medium'], finished P19, score 0.42, SC pits 0"
+  },
+  {
+    "race": "monaco_chaos",
+    "final_position": 19,
+    "score": 0.3416,
+    "pit_laps": [],
+    "pit_count": 14,
+    "compounds_used": [
+      "intermediate",
+      "soft",
+      "medium"
+    ],
+    "total_reward": -286.1,
+    "regulation_ok": true,
+    "sc_pits_taken": 0,
+    "lesson": "Pitted on laps [] (14 stops), used ['intermediate', 'soft', 'medium'], finished P19, score 0.34, SC pits 0"
   }
 ]
