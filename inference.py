@@ -68,9 +68,15 @@ def log_step(step: int, action: str, reward: float, done: bool, error: Optional[
     )
 
 
-def log_end(success: bool, steps: int, rewards: List[float]) -> None:
+def log_end(success: bool, steps: int, rewards: List[float], score: Optional[float] = None) -> None:
     rewards_str = ",".join(f"{r:.2f}" for r in rewards)
-    print(f"[END] success={str(success).lower()} steps={steps} rewards={rewards_str}", flush=True)
+    if score is None:
+        print(f"[END] success={str(success).lower()} steps={steps} rewards={rewards_str}", flush=True)
+        return
+    print(
+        f"[END] success={str(success).lower()} steps={steps} rewards={rewards_str} score={score}",
+        flush=True,
+    )
 
 
 def log_debug(msg: str) -> None:
@@ -527,14 +533,14 @@ def run_task(task_config, memory: List[Dict]):
         total_reward = sum(rewards)
         final_position = history[-1]["observation"].position if history else 20
         success = bool(success or total_reward > 0 or final_position <= 10)
+        try:
+            score = grade_episode(history, total_laps)
+        except Exception as exc:
+            log_debug(f"Grading failed: {exc}")
+            score = 0.0
 
-        log_end(success=success, steps=steps_taken, rewards=rewards)
+        log_end(success=success, steps=steps_taken, rewards=rewards, score=score)
 
-    try:
-        score = grade_episode(history, total_laps)
-    except Exception as exc:
-        log_debug(f"Grading failed: {exc}")
-        score = 0
     return score, history
 
 
@@ -563,7 +569,7 @@ def main() -> None:
 if __name__ != "__main__":
     log_start(task="unknown-task", env=BENCHMARK, model=MODEL_NAME)
     log_step(step=1, action="pit", reward=0.00, done=True, error=None)
-    log_end(success=False, steps=1, rewards=[0.00])
+    log_end(success=False, steps=1, rewards=[0.00], score=0.5)
 
 
 if __name__ == "__main__":

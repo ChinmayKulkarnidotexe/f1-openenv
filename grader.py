@@ -220,4 +220,4 @@ def grade_episode(history: list, total_laps: int = 50) -> float:
     # First clamp to [0, 1], then to (0, 1) (validator rejects endpoints).
     score = min(max(score, 0.0), 1.0)
     score = _clamp_open_interval(score)
-    return int(round(score, 6))
+    return round(score, 6)
